@@ -41,7 +41,7 @@ mkdir -p $dir $lmdir $tmpdir
 # Make phones symbol-table (adding in silence and verbal and non-verbal noises at this point).
 # We are adding suffixes _B, _E, _S for beginning, ending, and singleton phones.
 
-# silence phones, one per line.
+# silence phones, one per line. $dir = data/local/dict
 echo sil > $dir/silence_phones.txt
 echo sil > $dir/optional_silence.txt
 
@@ -49,6 +49,9 @@ echo sil > $dir/optional_silence.txt
 # really to the same base phone.
 
 # Create the lexicon, which is just an identity mapping
+# tr - translate (translate space to newline)
+# sort -u -- Sort unique phones
+# grep -v -F -f -- -v for invert match -non matching lines -f patterns from file
 cut -d' ' -f2- $srcdir/train.text | tr ' ' '\n' | sort -u > $dir/phones.txt
 paste $dir/phones.txt $dir/phones.txt > $dir/lexicon.txt || exit 1;
 grep -v -F -f $dir/silence_phones.txt $dir/phones.txt > $dir/nonsilence_phones.txt 
@@ -74,12 +77,14 @@ if ! command -v prune-lm >/dev/null 2>&1 ; then
   exit 1
 fi
 
+# Replace start by <s> and end by </s>
 cut -d' ' -f2- $srcdir/train.text | sed -e 's:^:<s> :' -e 's:$: </s>:' \
   > $srcdir/lm_train.text
 
 build-lm.sh -i $srcdir/lm_train.text -n 2 \
   -o $tmpdir/lm_phone_bg.ilm.gz
 
+#grep -v unk - not matching unknown words
 compile-lm $tmpdir/lm_phone_bg.ilm.gz -t=yes /dev/stdout | \
 grep -v unk | gzip -c > $lmdir/lm_phone_bg.arpa.gz 
 

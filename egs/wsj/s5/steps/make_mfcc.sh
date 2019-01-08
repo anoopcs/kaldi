@@ -30,21 +30,21 @@ if [ $# -lt 1 ] || [ $# -gt 3 ]; then
    exit 1;
 fi
 
-data=$1
+data=$1 #data/<train/test/dev> for TIMIT -- data/train_yesno or data/test_yesno
 if [ $# -ge 2 ]; then
-  logdir=$2
+  logdir=$2 #exp/make_mfcc/train for TIMIT
 else
   logdir=$data/log
 fi
 if [ $# -ge 3 ]; then
-  mfccdir=$3
+  mfccdir=$3 #mfcc
 else
   mfccdir=$data/data
 fi
 
 # make $mfccdir an absolute pathname.
 mfccdir=`perl -e '($dir,$pwd)= @ARGV; if($dir!~m:^/:) { $dir = "$pwd/$dir"; } print $dir; ' $mfccdir ${PWD}`
-
+                 
 # use "name" as part of name of the archive.
 name=`basename $data`
 
@@ -59,7 +59,7 @@ fi
 
 scp=$data/wav.scp
 
-required="$scp $mfcc_config"
+required="$scp $mfcc_config" #$mfcc_config=conf/mfcc.conf
 
 for f in $required; do
   if [ ! -f $f ]; then
@@ -101,7 +101,7 @@ if [ -f $data/segments ]; then
 
   utils/split_scp.pl $data/segments $split_segments || exit 1;
   rm $logdir/.error 2>/dev/null
-
+  	  
   $cmd JOB=1:$nj $logdir/make_mfcc_${name}.JOB.log \
     extract-segments scp,p:$scp $logdir/segments.JOB ark:- \| \
     compute-mfcc-feats $vtln_opts --verbose=2 --config=$mfcc_config ark:- ark:- \| \
@@ -115,13 +115,16 @@ else
   for n in $(seq $nj); do
     split_scps="$split_scps $logdir/wav_${name}.$n.scp"
   done
-
+  # scp=data/train/wav.scp
   utils/split_scp.pl $scp $split_scps || exit 1;
 
 
   # add ,p to the input rspecifier so that we can just skip over
   # utterances that have bad wave data.
-
+  # logdir: exp/make_mfcc/train for TIMIT
+  # cmd =run.pl ==> run.pl --mem 4G JOB=1:10 exp/make_mfcc/train/make_mfcc_train.JOB.log compute-mfcc-feats --verbose=2 --config=conf/mfcc.conf scp,p:exp/make_mfcc/train/wav_train.JOB.scp ark:- | copy-feats  --compress=true ark:- ark,scp:/home/anoop/kaldi/egs/timit/s5/mfcc/raw_mfcc_train.JOB.ark,/home/anoop/kaldi/egs/timit/s5/mfcc/raw_mfcc_train.JOB.scp
+  
+  # run.pl JOB=1:1 exp/make_mfcc/train_yesno/make_mfcc_train_yesno.JOB.log compute-mfcc-feats --verbose=2 --config=conf/mfcc.conf scp,p:exp/make_mfcc/train_yesno/wav_train_yesno.JOB.scp ark:- \| copy-feats --compress=true ark:- ark,scp:/home/anoop/kaldi/egs/yesno/s5/mfcc/raw_mfcc_train_yesno.JOB.ark,/home/anoop/kaldi/egs/yesno/s5/mfcc/raw_mfcc_train_yesno.JOB.scp
   $cmd JOB=1:$nj $logdir/make_mfcc_${name}.JOB.log \
     compute-mfcc-feats  $vtln_opts --verbose=2 --config=$mfcc_config \
      scp,p:$logdir/wav_${name}.JOB.scp ark:- \| \
@@ -157,6 +160,9 @@ if [ $nf -ne $nu ]; then
   echo "It seems not all of the feature files were successfully processed ($nf != $nu);"
   echo "consider using utils/fix_data_dir.sh $data"
 fi
+## In yesno example the following error occurs as the list of test files contains 2 README files also.
+#  It seems not all of the feature files were successfully processed (29 != 31);
+#  corrected later by a call to utils/fix_data_dir.sh data/test_yesno
 
 if [ $nf -lt $[$nu - ($nu/20)] ]; then
   echo "Less than 95% the features were successfully generated.  Probably a serious error."

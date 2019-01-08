@@ -46,7 +46,7 @@ if [ -d $*/TRAIN ]; then
   test_dir=TEST
 fi
 
-tmpdir=$(mktemp -d /tmp/kaldi.XXXX);
+tmpdir=$(mktemp -d /tmp/kaldi.XXXX); # create a temporary directory
 trap 'rm -rf "$tmpdir"' EXIT
 
 # Get the list of speakers. The list of speakers in the 24-speaker core test
@@ -62,27 +62,38 @@ else
   ls -d "$*"/train/dr*/* | sed -e "s:^.*/::" > $tmpdir/train_spk
 fi
 
-cd $dir
+cd $dir #inside s5/data/local/data
 for x in train dev test; do
   # First, find the list of audio files (use only si & sx utterances).
   # Note: train & test sets are under different directories, but doing find on
   # both and grepping for the speakers will work correctly.
   find $*/{$train_dir,$test_dir} -not \( -iname 'SA*' \) -iname '*.WAV' \
-    | grep -f $tmpdir/${x}_spk > ${x}_sph.flist
+    | grep -f $tmpdir/${x}_spk > ${x}_sph.flist 
+  #train_sph.flist - List of training files
+  #dev_sph.flist
+  #test_sph.flist - - List of test files -192 core set
 
-  sed -e 's:.*/\(.*\)/\(.*\).WAV$:\1_\2:' ${x}_sph.flist \
-    > $tmpdir/${x}_sph.uttids
-  paste $tmpdir/${x}_sph.uttids ${x}_sph.flist \
-    | sort -k1,1 > ${x}_sph.scp
+  sed -e 's:.*/\(.*\)/\(.*\).WAV$:\1_\2:i' ${x}_sph.flist > $tmpdir/${x}_sph.uttids
+  paste $tmpdir/${x}_sph.uttids ${x}_sph.flist | sort -k1,1 > ${x}_sph.scp 
+  #paste combine conrresponding lines in each file into a single file separated by a tab
+  #sort -k1,1 by first field
+  #utterance ID to file mapping  (Filename->filename in TIMIT)
+  #train_sph.scp 
+  #dev_sph.scp
+  #test_sph.scp 
 
   cat ${x}_sph.scp | awk '{print $1}' > ${x}.uttids
+  #utterance ID file -> Simply filenames here as utteranceID
+  #train.uttids 
+  #dev.uttids
+  #test.uttids 
 
   # Now, Convert the transcripts into our format (no normalization yet)
   # Get the transcripts: each line of the output contains an utterance
   # ID followed by the transcript.
   find $*/{$train_dir,$test_dir} -not \( -iname 'SA*' \) -iname '*.PHN' \
     | grep -f $tmpdir/${x}_spk > $tmpdir/${x}_phn.flist
-  sed -e 's:.*/\(.*\)/\(.*\).PHN$:\1_\2:' $tmpdir/${x}_phn.flist \
+  sed -e 's:.*/\(.*\)/\(.*\).PHN$:\1_\2:i' $tmpdir/${x}_phn.flist \
     > $tmpdir/${x}_phn.uttids
   while read line; do
     [ -f $line ] || error_exit "Cannot find transcription file '$line'";
@@ -90,21 +101,52 @@ for x in train dev test; do
   done < $tmpdir/${x}_phn.flist > $tmpdir/${x}_phn.trans
   paste $tmpdir/${x}_phn.uttids $tmpdir/${x}_phn.trans \
     | sort -k1,1 > ${x}.trans
+  #utterance ID - transcription mapping -> utteranceID here are filenames
+  #train.trans 
+  #dev.trans
+  #test.trans
 
   # Do normalization steps.
   cat ${x}.trans | $local/timit_norm_trans.pl -i - -m $conf/phones.60-48-39.map -to 48 | sort > $x.text || exit 1;
-
+  #utterance ID - 48 phoneme label transcription 
+  #train.text 
+  #dev.text
+  #test.text
+  
   # Create wav.scp
   awk '{printf("%s '$sph2pipe' -f wav %s |\n", $1, $2);}' < ${x}_sph.scp > ${x}_wav.scp
+  #Utterance ID - Audio file path mapping
+  #train_wav.scp
+  #test_wav.scp
 
   # Make the utt2spk and spk2utt files.
   cut -f1 -d'_'  $x.uttids | paste -d' ' $x.uttids - > $x.utt2spk
   cat $x.utt2spk | $utils/utt2spk_to_spk2utt.pl > $x.spk2utt || exit 1;
+  #train.utt2spk
+  #test.utt2spk
+  #train.spk2utt
+  #test.spk2utt
 
   # Prepare gender mapping
   cat $x.spk2utt | awk '{print $1}' | perl -ane 'chop; m:^.:; $g = lc($&); print "$_ $g\n";' > $x.spk2gender
+  #train.spk2gender
+  #test.spk2gender
 
-  # Prepare STM file for sclite:
+  # Prepare STM file for sclite: See http://www1.icsi.berkeley.edu/Speech/docs/sctk-1.2/infmts.htm
+  # stm - Definition of segment time mark input file
+  # This describes the segment time marked files to be used for scoring the output of speech recognizers via the NIST sclite() program. This is a reference file format. 
+  #  The segment time mark file consists of a concatenation of text segment records from a waveform file. Each record is separated by a newline and contains: the waveform's filename and channel identifier [A | B], the talkers id, begin and end times (in seconds), optional subset label and the text for the segment. Each record follows this BNF format:
+
+  #STM :== <F> <C> <S> <BT> <ET> [ <LABEL> ] transcript . . .
+
+  #  Where :
+  #      <F> The waveform filename. NOTE: no pathnames or extensions are expected. 
+  #      <C> The waveform channel. The text of the waveform channel is not restricted by sclite. The text can be any text string without witespace so long as the matching string is found in both the reference and hypothesis input files. 
+  #      <S> The speaker id, no restrictions apply to this name. 
+  #      <BT> The begin time (seconds) of the segment. 
+  #      <ET> The end time (seconds) of the segment. 
+  #      <LABEL> A comma separated list of subset identifiers enclosed in angle brackets. Ex. "<O,F,00>".
+
   wav-to-duration --read-entire-file=true scp:${x}_wav.scp ark,t:${x}_dur.ark || exit 1
   awk -v dur=${x}_dur.ark \
   'BEGIN{
@@ -119,7 +161,8 @@ for x in train dev test; do
    }
   ' ${x}.text >${x}.stm || exit 1
 
-  # Create dummy GLM file for sclite:
+  # Create dummy GLM file for sclite:  glm file contains the mapping rules to be applied to both  reference and system output transcript
+
   echo ';; empty.glm
   [FAKE]     =>  %HESITATION     / [ ] __ [ ] ;; hesitation token
   ' > ${x}.glm

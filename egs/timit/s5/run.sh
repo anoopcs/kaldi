@@ -36,7 +36,8 @@ echo "                Data & Lexicon & Language Preparation                     
 echo ============================================================================
 
 #timit=/export/corpora5/LDC/LDC93S1/timit/TIMIT # @JHU
-timit=/mnt/matylda2/data/TIMIT/timit # @BUT
+#timit=/mnt/matylda2/data/TIMIT/timit # @BUT
+timit=/home/anoop/Desktop/Datasets/timit # @IISc
 
 local/timit_data_prep.sh $timit || exit 1
 
@@ -58,6 +59,9 @@ mfccdir=mfcc
 
 
 for x in train dev test; do
+  # --cmd "$train_cmd" -How to run jobs =Running in local machine. Set to run.pl --mem 4G in cmd.sh
+  # --nj $feats_nj - # number of parallel jobs = 10
+  # mfccdir = mfcc
   steps/make_mfcc.sh --cmd "$train_cmd" --nj $feats_nj data/$x exp/make_mfcc/$x $mfccdir
   steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfccdir
 done

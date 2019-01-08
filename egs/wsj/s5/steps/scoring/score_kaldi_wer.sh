@@ -3,7 +3,7 @@
 # Apache 2.0
 
 # See the script steps/scoring/score_kaldi_cer.sh in case you need to evalutate CER
-
+# Text Added to verify Git
 [ -f ./path.sh ] && . ./path.sh
 
 # begin configuration section.
