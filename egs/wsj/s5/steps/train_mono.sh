@@ -40,9 +40,9 @@ if [ $# != 3 ]; then
   exit 1;
 fi
 
-data=$1
-lang=$2
-dir=$3
+data=$1 #data/train_yesno 
+lang=$2 # data/lang 
+dir=$3 # exp/mono0a
 
 oov_sym=`cat $lang/oov.int` || exit 1;
 
@@ -75,6 +75,9 @@ if [ $stage -le -3 ]; then
   $cmd JOB=1 $dir/log/init.log \
     gmm-init-mono $shared_phones_opt "--train-feats=$feats subset-feats --n=10 ark:- ark:-|" $lang/topo $feat_dim \
     $dir/0.mdl $dir/tree || exit 1;
+    # "Usage:  gmm-init-mono <topology-in> <dim> <model-out> <tree-out> \n"
+    #   "e.g.: \n"
+    #   " gmm-init-mono topo 39 mono.mdl mono.tree\n";
 fi
 
 numgauss=`gmm-info --print-args=false $dir/0.mdl | grep gaussians | awk '{print $NF}'`
@@ -149,5 +152,4 @@ echo "$0: Done training monophone system in $dir"
 exit 0
 
 # example of showing the alignments:
-# show-alignments data/lang/phones.txt $dir/30.mdl "ark:gunzip -c $dir/ali.0.gz|" | head -4
-
+# $ ~/kaldi/egs/yesno/s5$ ~/kaldi/src/bin/show-alignments data/lang/phones.txt exp/mono0a/40.mdl "ark:gunzip -c exp/mono0a/ali.1.gz|" | head -4

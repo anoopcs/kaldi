@@ -104,22 +104,23 @@ if [ $# -ne 4 ]; then
   exit 1;
 fi
 
-srcdir=$1
-oov_word=$2
-tmpdir=$3
-dir=$4
+srcdir=$1 # data/local/dict
+oov_word=$2 #<SIL>
+tmpdir=$3 # data/local/lang
+dir=$4 # data/lang 
 
 
 if [ -d $dir/phones ]; then
   rm -r $dir/phones
 fi
-mkdir -p $dir $tmpdir $dir/phones
+mkdir -p $dir $tmpdir $dir/phones #create data/lang data/local/lang and data/lang/phones
 
 silprob=false
-[ -f $srcdir/lexiconp_silprob.txt ] && silprob=true
+[ -f $srcdir/lexiconp_silprob.txt ] && silprob=true #-f ->file exists and is not a dictionary
 
 [ -f path.sh ] && . ./path.sh
 
+#Validating UTF-8 compatibility
 ! utils/validate_dict_dir.pl $srcdir && \
   echo "*Error validating directory $srcdir*" && exit 1;
 
@@ -132,6 +133,7 @@ if [[ ! -f $srcdir/lexiconp.txt ]]; then
   perl -ape 's/(\S+\s+)(.+)/${1}1.0\t$2/;' < $srcdir/lexicon.txt > $srcdir/lexiconp.txt || exit 1;
 fi
 
+# -z check for null
 if [ ! -z "$unk_fst" ] && [ ! -f "$unk_fst" ]; then
   echo "$0: expected --unk-fst $unk_fst to exist as a file"
   exit 1
@@ -386,7 +388,7 @@ if [ ! -z "$extra_word_disambig_syms" ]; then
     awk -v WC=$word_count '{ printf("%s %d\n", $1, ++WC); }' >> $dir/words.txt || exit 1;
 fi
 
-# format of $dir/words.txt:
+# format of $dir/words.txt: #data/lang/words.txt
 #<eps> 0
 #a 1
 #aa 2
@@ -412,6 +414,10 @@ perl -ape 's/(\S+\s+)\S+\s+(.+)/$1$2/;' <$tmpdir/lexiconp.txt >$tmpdir/align_lex
 
 cat $tmpdir/align_lexicon.txt | \
   perl -ane '@A = split; print $A[0], " ", join(" ", @A), "\n";' | sort | uniq > $dir/phones/align_lexicon.txt
+# align_lexicon.end
+# <eps> <eps> sil
+# aa aa aa
+# ae ae ae
 
 if [ -f $srcdir/nonterminals.txt ]; then
   utils/lang/grammar/augment_phones_txt.py $dir/phones.txt $srcdir/nonterminals.txt $dir/phones.txt
@@ -449,27 +455,31 @@ cat $dir/phones/align_lexicon.txt | utils/sym2int.pl -f 3- $dir/phones.txt | \
   utils/sym2int.pl -f 1-2 $dir/words.txt > $dir/phones/align_lexicon.int
 
 # Create the basic L.fst without disambiguation symbols, for use
-# in training.
+# in training. #??disambiguation symbols(s,</s>)??
 
 if $silprob; then
   # Add silence probabilities (models the prob. of silence before and after each
   # word).  On some setups this helps a bit.  See utils/dict_dir_add_pronprobs.sh
   # and where it's called in the example scripts (run.sh).
+ 
   utils/lang/make_lexicon_fst_silprob.py $grammar_opts --sil-phone=$silphone \
          $tmpdir/lexiconp_silprob.txt $srcdir/silprob.txt | \
      fstcompile --isymbols=$dir/phones.txt --osymbols=$dir/words.txt \
        --keep_isymbols=false --keep_osymbols=false |   \
      fstarcsort --sort_type=olabel > $dir/L.fst || exit 1;
 else
+
+  ## utils/lang/make_lexicon_fst.py  --sil-prob=0.5 --sil-phone=SIL data/local/lang/lexiconp.txt |     fstcompile --isymbols=data/lang/phones.txt --osymbols=data/lang/words.txt --keep_isymbols=false --keep_osymbols=false | fstarcsort --sort_type=olabel > data/lang/L.fst
+  ## fstarcsort --sort_type=olabel sort the FST based on output symbols
   utils/lang/make_lexicon_fst.py $grammar_opts --sil-prob=$sil_prob --sil-phone=$silphone \
             $tmpdir/lexiconp.txt | \
     fstcompile --isymbols=$dir/phones.txt --osymbols=$dir/words.txt \
       --keep_isymbols=false --keep_osymbols=false | \
-    fstarcsort --sort_type=olabel > $dir/L.fst || exit 1;
+    fstarcsort --sort_type=olabel > $dir/L.fst || exit 1; # Final Lexicon FST at data/lang
 fi
 
 # The file oov.txt contains a word that we will map any OOVs to during
-# training.
+# training. # $oov_word = sil , oov.int = 38
 echo "$oov_word" > $dir/oov.txt || exit 1;
 cat $dir/oov.txt | utils/sym2int.pl $dir/words.txt >$dir/oov.int || exit 1;
 # integer version of oov symbol, used in some scripts.
@@ -482,7 +492,7 @@ cat $dir/oov.txt | utils/sym2int.pl $dir/words.txt >$dir/oov.int || exit 1;
 # wdisambig_words.int contains the corresponding list interpreted by the
 # symbol table words.txt, and wdisambig_phones.int contains the corresponding
 # list interpreted by the symbol table phones.txt.
-echo '#0' >$dir/phones/wdisambig.txt
+echo '#0' >$dir/phones/wdisambig.txt #word-level disambiguation symbols file
 
 # In case there are extra word-level disambiguation symbols they need
 # to be added to the existing word-level disambiguation symbols file.
@@ -492,17 +502,22 @@ if [ ! -z "$extra_word_disambig_syms" ]; then
   cat $extra_word_disambig_syms | awk '{ print $1 }' >> $dir/phones/wdisambig.txt
 fi
 
+# #0 written to wdisambig_phones.int and wdisambig_words.int
 utils/sym2int.pl $dir/phones.txt <$dir/phones/wdisambig.txt >$dir/phones/wdisambig_phones.int
 utils/sym2int.pl $dir/words.txt <$dir/phones/wdisambig.txt >$dir/phones/wdisambig_words.int
 
 # Create these lists of phones in colon-separated integer list form too,
 # for purposes of being given to programs as command-line options.
+# $f.int - integer version of symbols silence/nonsilence/optional_silence/disambig/context_indep
+# $f.csl - colon-separated integer list form 
+# eg: disambig.csl 49:50
+# eg: nonsilence.csl 2:3: ... :47:48
 for f in silence nonsilence optional_silence disambig context_indep; do
   utils/sym2int.pl $dir/phones.txt <$dir/phones/$f.txt >$dir/phones/$f.int
   utils/sym2int.pl $dir/phones.txt <$dir/phones/$f.txt | \
    awk '{printf(":%d", $1);} END{printf "\n"}' | sed s/:// > $dir/phones/$f.csl || exit 1;
 done
-
+# integer version of symbols - sets/extra_questions
 for x in sets extra_questions; do
   utils/sym2int.pl $dir/phones.txt <$dir/phones/$x.txt > $dir/phones/$x.int || exit 1;
 done
@@ -524,7 +539,7 @@ nonsilphonelist=`cat $dir/phones/nonsilence.csl`
 # should cover all the phones.  Try running utils/validate_lang.pl to check that
 # everything is OK after modifying the topo file.
 utils/gen_topo.pl $num_nonsil_states $num_sil_states $nonsilphonelist $silphonelist >$dir/topo
-
+# topo defining the number of states and transition probabiities for silence and non-silence phones
 
 # Create the lexicon FST with disambiguation symbols, and put it in lang_test.
 # There is an extra step where we create a loop to "pass through" the
@@ -539,6 +554,7 @@ if $silprob; then
      fstaddselfloops  $dir/phones/wdisambig_phones.int $dir/phones/wdisambig_words.int | \
      fstarcsort --sort_type=olabel > $dir/L_disambig.fst || exit 1;
 else
+  #utils/lang/make_lexicon_fst.py         --sil-prob=0.5 --sil-phone=SIL --sil-disambig='#'1          data/local/lang/lexiconp_disambig.txt |      fstcompile --isymbols=data/lang/phones.txt --osymbols=data/lang/words.txt        --keep_isymbols=false --keep_osymbols=false |        fstaddselfloops  data/lang/phones/wdisambig_phones.int data/lang/phones/wdisambig_words.int |      fstarcsort --sort_type=olabel > data/lang/L_disambig.fst
   utils/lang/make_lexicon_fst.py $grammar_opts \
        --sil-prob=$sil_prob --sil-phone=$silphone --sil-disambig='#'$ndisambig \
          $tmpdir/lexiconp_disambig.txt | \

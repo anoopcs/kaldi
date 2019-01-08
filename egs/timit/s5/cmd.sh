@@ -10,8 +10,11 @@
 # conf/queue.conf in http://kaldi-asr.org/doc/queue.html for more information,
 # or search for the string 'default_config' in utils/queue.pl or utils/slurm.pl.
 
-export train_cmd="queue.pl --mem 4G"
-export decode_cmd="queue.pl --mem 4G"
+#export train_cmd="queue.pl --mem 4G" #You'll change this variable if you don't have GridEngine or if your queue is configured differently from CLSP@JHU. To run everything locally on a single machine you can set export train_cmd=run.pl.
+export train_cmd="run.pl --mem 4G"
+
+#export decode_cmd="queue.pl --mem 4G"
+export decode_cmd="run.pl --mem 4G"
 # the use of cuda_cmd is deprecated, used only in 'nnet1',
 export cuda_cmd="queue.pl --gpu 1"
 

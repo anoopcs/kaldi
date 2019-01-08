@@ -47,7 +47,7 @@ for($x = 0; $x < 2; $x++) {
   }
 }
 
-$symtab = shift @ARGV;
+$symtab = shift @ARGV; #data/lang/phones.txt
 if (!defined $symtab) {
   print STDERR "Usage: sym2int.pl [options] symtab [input transcriptions] > output transcriptions\n" .
     "options: [--map-oov <oov-symbol> ]  [-f <field-range> ]\n" .
